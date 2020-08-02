@@ -8,6 +8,7 @@ let initiated = false
 let maxRollers = null
 let rollers // map <roller id>: <their roll>
 
+// todo: pipeline should only match longest command sequence !!
 pipeline(bot).onCommand('roll').onCommand("initiate").do((text, cabal, envelope) => {
     let response 
     maxRollers = parseInt(text)
@@ -28,13 +29,35 @@ pipeline(bot).onCommand('roll').onCommand("initiate").do((text, cabal, envelope)
     console.log(response)
     bot.post(cabal, envelope.channel, response)
 })
+
 pipeline(bot).onCommand('roll').onCommand("help").do((text, cabal, envelope) => {
     let commands = []
     commands.push("!roll help:  display this help")
     commands.push("!roll initiate <number of roller>:  start a new roll")
     commands.push("!roll remaining:  get the number of rollers remaining until the final results roll out")
+    commands.push("!roll fuckit:  decide a winner based on the current rollers")
     commands.push("!roll:  perform a roll")
     commands.forEach(cmd => bot.post(cabal, envelope.channel, cmd))
+})
+
+function declareWinner () {
+    let highroller // { roll, key }
+    rollers.forEach((roll, key) => { 
+        if (!highroller) { highroller = { roll, key }} 
+        if (roll > highroller.roll) { highroller = { roll, key }}
+    })
+    const winner = cabal.getUsers()[highroller.key]
+    response = `${winner.name ? winner.name : winner.key.slice(0, 8)} won with ${highroller.roll}${"!".repeat(Math.floor(Math.random() * 7 + 1))}`
+    bot.post(cabal, envelope.channel, response)
+    reset()
+}
+
+pipeline(bot).onCommand('roll').onCommand("fuckit").do((text, cabal, envelope) => {
+    if (!initiated) {
+        response = "initiate a new round with !roll initiate <number of rollers>"
+        return bot.post(cabal, envelope.channel, response)
+    }
+    declareWinner()
 })
 
 pipeline(bot).onCommand('roll').onCommand("remaining").do((text, cabal, envelope) => {
@@ -67,15 +90,7 @@ pipeline(bot).onCommand('roll').do((text, cabal, envelope) => {
     rollers.set(envelope.author.key, roll)
     bot.post(cabal, envelope.channel, response)
     if (rollers.size >= maxRollers) {  
-        let highroller // { roll, key }
-        rollers.forEach((roll, key) => { 
-            if (!highroller) { highroller = { roll, key }} 
-            if (roll > highroller.roll) { highroller = { roll, key }}
-        })
-        const winner = cabal.getUsers()[highroller.key]
-        response = `${winner.name ? winner.name : winner.key.slice(0, 8)} won with ${highroller.roll}${"!".repeat(Math.floor(Math.random() * 7 + 1))}`
-        bot.post(cabal, envelope.channel, response)
-        reset()
+        declareWinner()
     }
 })
 
